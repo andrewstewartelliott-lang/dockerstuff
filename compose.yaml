@@ -6,6 +6,11 @@ services:
     depends_on:
       - db
 
+  app2:
+    image: andrewstewartelliott/gin-info-api:latest
+    ports:
+      - "8080:80"
+
   db:
     image: postgres:16
     environment:
