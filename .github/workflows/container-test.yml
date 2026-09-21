@@ -28,10 +28,13 @@ jobs:
           cache: true
 
       - name: Download Go dependencies
-        run: go mod download
+        run: |
+          cd gin-info-api
+          go mod download
 
       - name: Run govulncheck
         run: |
+          cd gin-info-api
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
 
