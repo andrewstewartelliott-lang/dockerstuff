@@ -24,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: ./gin-info-api/go.mod
           cache: true
 
       - name: Download Go dependencies
@@ -37,6 +37,7 @@ jobs:
 
       - name: Build Docker image
         run: |
+          cd gin-info-api
           docker buildx build --platform linux/amd64,linux/arm64 \
           -t gin-info-api:latest .
 
