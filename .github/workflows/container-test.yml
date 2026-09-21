@@ -41,8 +41,7 @@ jobs:
       - name: Build Docker image
         run: |
           cd gin-info-api
-          docker buildx build --platform linux/amd64,linux/arm64 \
-          -t gin-info-api:latest .
+          docker buildx build -t gin-info-api:latest .
 
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
