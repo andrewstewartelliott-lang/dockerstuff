@@ -1,47 +1,69 @@
-name: Container smoke test
+name: Build and security scan
 
 on:
   push:
+    branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+  security-events: write
+
+env:
+  IMAGE_NAME: myapp
+  IMAGE_TAG: ${{ github.sha }}
+
 jobs:
-  smoke-test:
-    runs-on: ubuntu-latest
+  build-and-scan:
+    runs-on: ubuntu-24.04
 
     steps:
-      - name: Check out repository
+      - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Pull API container
-        run: docker pull andrewstewartelliott/gin-info-api:latest
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
 
-      - name: Start API container
+      - name: Download Go dependencies
+        run: go mod download
+
+      - name: Run govulncheck
         run: |
-          docker run \
-            --detach \
-            --name gin-info-api \
-            --publish 8080:8080 \
-            andrewstewartelliott/gin-info-api:latest
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
-      - name: Wait for /info endpoint
+      - name: Build Docker image
         run: |
-          for attempt in {1..30}; do
-            if curl --fail --silent --show-error \
-              --max-time 5 \
-              http://127.0.0.1:8080/info; then
-              echo
-              echo "The /info endpoint is responding."
-              exit 0
-            fi
+          docker buildx build --platform linux/amd64,linux/arm64 \
+          -t gin-info-api:latest .
 
-            echo "Waiting for the API to start... attempt ${attempt}/30"
-            sleep 2
-          done
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          vuln-type: "os,library"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          format: "table"
+          exit-code: "1"
 
-          echo "The /info endpoint did not become ready."
-          docker logs gin-info-api
-          exit 1
-
-      - name: Stop and remove container
+      - name: Generate Trivy SARIF report
         if: always()
-        run: docker rm --force gin-info-api
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: "${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          vuln-type: "os,library"
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+          format: "sarif"
+          output: "trivy-results.sarif"
+          exit-code: "0"
+
+      - name: Upload Trivy results to GitHub code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-results.sarif
